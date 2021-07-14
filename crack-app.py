@@ -1,10 +1,45 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
+import requests
 import streamlit as st
 import torch
 from PIL import Image
 from fastai.learner import load_learner
 from patchify import patchify, unpatchify
+
+
+def download_file_from_google_drive(id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+
+    session = requests.Session()
+
+    response = session.get(URL, params = { 'id' : id }, stream = True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = { 'id' : id, 'confirm' : token }
+        response = session.get(URL, params = params, stream = True)
+
+    save_response_content(response, destination)
+
+
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+
+    return None
+
+
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
 
 
 def padding(array, xx, yy):
@@ -30,15 +65,12 @@ def padding(array, xx, yy):
         return np.pad(array, pad_width=((a, aa), (b, bb)), mode='constant')
 
 
-def detect_cracks(model_path, rgb_image, dest_img_path=None):
+def detect_cracks(model, rgb_image, dest_img_path=None):
 
     step = 224
     patch_shape = (224, 224, 3)
 
-    # load model
-    st.warning("Loading Model..🤞")
-    learn_inf = load_learner(model_path)
-    st.success("Loaded Model Succesfully!!🤩👍")
+    learn_inf = model
 
     st.warning("Inferencing from Model...")
 
@@ -98,8 +130,26 @@ def detect_cracks(model_path, rgb_image, dest_img_path=None):
     return reconstructed_image_clipped
 
 
+def load_model():
+    f_checkpoint = Path("fastai2_resnet50.pkl")
+
+    if not f_checkpoint.exists():
+        with st.spinner("Downloading model... this may take a while! \n Don't stop it!"):
+            # download model and weights from Google Drive
+            file_id = "1f1JEKI5zxBOM8kYtJSvHVgvC6bMOxuMW"
+            download_file_from_google_drive(file_id, f_checkpoint)
+
+    # load model
+    st.warning("Loading Model..🤞")
+    model = load_learner(f_checkpoint)
+    st.success("Loaded Model Succesfully!!🤩👍")
+
+    return model
+
+
 def do_inference(rgb_image):
-    img = detect_cracks(model_path="fastai2_resnet50.pkl",
+    model = load_model()
+    img = detect_cracks(model=model,
                         rgb_image=rgb_image)
     st.success("Crack Detection Successfully Completed!! Plotting Image..")
     st.image(img, width=720)
@@ -127,13 +177,6 @@ def main():
 
     if st.button("Run Model"):
         do_inference(rgb_im)
-    #     st.warning("Loading Model..🤞")
-    #     model = load_model('psp_resnet101_ade')
-    #     img = image.imread(image_path)
-    #     img = test_transform(img, ctx)
-    #     st.success("Loaded Model Succesfully!!🤩👍")
-    #
-    #     plot_image(model, img)
 
 
 def footer():
