@@ -3,6 +3,6 @@ torch==1.9.0+cpu
 torchvision==0.10.0+cpu
 pillow==8.2
 patchify==0.2.3
+opencv-python-headless==4.5.3.56
 fastai==2.4
-opencv-python==4.5.3.56
 streamlit==0.84.1
